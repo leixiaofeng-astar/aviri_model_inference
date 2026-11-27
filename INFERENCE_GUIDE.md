@@ -1,10 +1,31 @@
 # AVIRI Visual-Impairment Fundus Classifier — Inference Guide
 
 Self-contained inference pipeline for binary visual-impairment screening on
-colour-fundus photos. Supports five backbones (`vit_base`, `swin_v2`,
-`retfound`, `retfound_mae`, `resnet50`) and three uncertainty-estimation
-methods (`softmax`, `mc_dropout`, `edl`). Runs on GPU when available and falls
-back to CPU automatically.
+colour-fundus photos. Supports nine backbones:
+
+| Flag                    | Architecture                                            | Input |
+| ----------------------- | ------------------------------------------------------- | ----- |
+| `--backbone vit_base`         | ViT-Base/16 ImageNet                               | 224   |
+| `--backbone swin_v2`          | Swin V2 Base                                       | 256   |
+| `--backbone retfound`         | RETFound CFP ViT-L/16                              | 224   |
+| `--backbone retfound_mae`     | RETFound MAE CFP ViT-L/16 (drop_path=0.2, BICUBIC) | 224   |
+| `--backbone resnet50`         | torchvision ResNet-50                              | 224   |
+| `--backbone vit_large_mae`    | ImageNet-MAE ViT-L/16                              | 224   |
+| `--backbone vit_base_mae`     | ImageNet-MAE ViT-B/16                              | 224   |
+| `--backbone dino_vitbase16`   | ImageNet-DINO ViT-B/16                             | 224   |
+| `--backbone retizero`         | RetiZero ViT-L/16 + LoRA rank 8                    | 224   |
+| `--backbone visionfm`         | VisionFM ViT-B/16 + MLP head (last-4-block CLS)    | 224   |
+
+Three uncertainty-estimation methods (`softmax`, `mc_dropout`, `edl`) — the
+MC Dropout and EDL pathways are wired for the ViT/Swin/RETFound checkpoints
+only; the newer foundation-model variants (`retizero`, `visionfm`,
+`vit_large_mae`, `vit_base_mae`, `dino_vitbase16`) ship with softmax-only
+checkpoints. Runs on GPU when available and falls back to CPU automatically.
+
+The `visionfm` backbone uses VisionFM's retinal channel stats (mean/std from
+`VisionFM-main/utils.py::get_stats("Fundus")`) and BICUBIC resize — all other
+backbones use ImageNet mean/std and BILINEAR (except `retfound_mae`, which
+uses BICUBIC to match its upstream MAE training pipeline).
 
 `retfound_mae` is the same ViT-L/16 architecture and weight format as
 `retfound`, but with `drop_path_rate=0.2` and BICUBIC resize (matching the
@@ -12,6 +33,17 @@ newer RETFound-MAE `main_finetune.py` defaults). It can be used with the same
 checkpoint — e.g. the SEED-only softmax checkpoint — and typically yields a
 slightly different operating point from `--backbone retfound` due to the
 BICUBIC interpolation.
+
+`retizero` loads fine-tuned LoRA ViT-L/16 checkpoints produced by
+`RetiZero/finetune_retizero.py`; it does **not** require the RetiZero.pth
+pretrained CLIP weights at inference, since the fine-tuned ``.pth`` file
+supplies every tensor (encoder + LoRA adapters + classifier).
+
+`visionfm` loads fine-tuned VisionFM checkpoints produced by
+`VisionFM-main/finetune_visionfm_for_multiclass_classification.py`. These
+checkpoints have a two-dict layout — `visionfm_state_dict` (backbone) and
+`classifier_state_dict` (3-layer MLP head, DDP-wrapped) — handled
+automatically by the loader.
 
 ---
 
@@ -22,6 +54,7 @@ model_inference/
 ├── infer_aviri.py            # inference entrypoint (this is what you run)
 ├── own_models_5.py           # backbone definitions (required for torch.load)
 ├── models_vit.py             # vendored RETFound ViT-L definition
+├── visionfm_model.py         # vendored minimal VisionFM ViT-B + MLP head
 ├── fundus_preprocess.py      # fundus-disc crop preprocessor
 ├── requirements.txt          # Python package list
 ├── INFERENCE_GUIDE.md        # this file
@@ -38,13 +71,24 @@ model_inference/
     │   ├── checkpoint-best_SEEDonly_AUC9497.pth                    # softmax
     │   ├── aviri_class_model4retfound_mc_dropout_lr5e-05-AUC9493.pth
     │   └── aviri_class_model4retfound_edl_lr5e-05-AUC9489.pth
-    └── resnet50/
-        └── aviri_class_model4ResNet50_lr1e-05-AUC9454.pth          # softmax
+    ├── resnet50/
+    │   └── aviri_class_model4ResNet50_lr1e-05-AUC9454.pth          # softmax
+    ├── vit_large_mae/
+    │   └── aviri_class_model4vit_large_mae_lr3e-05-AUC9505.pth     # softmax
+    ├── dino_vitbase16/
+    │   └── aviri_class_model4dino_vitbase16_lr1e-06-AUC9472.pth    # softmax
+    ├── retizero/
+    │   └── retizero_lr1e-4_best-AUC9443.pth                        # softmax
+    └── visionfm/
+        └── checkpoint_best_finetune-AUC0.9484.pth                  # softmax
 ```
 
 The checkpoints under `models_weight/` are the exact ones referenced in the
-training commands and have already been staged here. `resnet50` is a
-softmax-only checkpoint (no MC-dropout or EDL variants).
+training commands and have already been staged here (the new-backbone
+checkpoints are symlinks to their original locations so no bytes are
+duplicated). The five newer backbones — `resnet50`, `vit_large_mae`,
+`dino_vitbase16`, `retizero`, `visionfm` — are softmax-only (no MC-dropout or
+EDL variants).
 
 ---
 
@@ -132,7 +176,7 @@ consistent at inference time to reproduce published AUCs.
 
 ```bash
 python infer_aviri.py \
-    --backbone  <vit_base|swin_v2|retfound|retfound_mae|resnet50> \
+    --backbone  <vit_base|swin_v2|retfound|retfound_mae|resnet50|vit_large_mae|vit_base_mae|dino_vitbase16|retizero|visionfm> \
     --method    <softmax|mc_dropout|edl> \
     --checkpoint <path/to/model.pth> \
     --input_dir  <path/to/images> \
@@ -162,6 +206,27 @@ python infer_aviri.py --method softmax --backbone swin_v2 \
 
 python infer_aviri.py --method softmax --backbone resnet50 \
     --checkpoint models_weight/resnet50/aviri_class_model4ResNet50_lr1e-05-AUC9454.pth \
+    --no_crop --input_dir /path/to/images
+
+# ViT-Large MAE (ImageNet-MAE pretrain)
+python infer_aviri.py --method softmax --backbone vit_large_mae \
+    --checkpoint models_weight/vit_large_mae/aviri_class_model4vit_large_mae_lr3e-05-AUC9505.pth \
+    --no_crop --input_dir /path/to/images
+
+# ViT-Base DINO (ImageNet-DINO pretrain)
+python infer_aviri.py --method softmax --backbone dino_vitbase16 \
+    --checkpoint models_weight/dino_vitbase16/aviri_class_model4dino_vitbase16_lr1e-06-AUC9472.pth \
+    --no_crop --input_dir /path/to/images
+
+# RetiZero (ViT-L/16 + LoRA rank 8, retinal-image CLIP pretrain)
+python infer_aviri.py --method softmax --backbone retizero \
+    --checkpoint models_weight/retizero/retizero_lr1e-4_best-AUC9443.pth \
+    --no_crop --input_dir /path/to/images
+
+# VisionFM (ViT-B/16 + 3-layer MLP over last-4-block CLS tokens,
+# retinal-image DINO pretrain — uses VisionFM's Fundus mean/std + BICUBIC)
+python infer_aviri.py --method softmax --backbone visionfm \
+    --checkpoint models_weight/visionfm/checkpoint_best_finetune-AUC0.9484.pth \
     --no_crop --input_dir /path/to/images
 ```
 

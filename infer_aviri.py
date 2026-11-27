@@ -1,8 +1,10 @@
 """AVIRI (Age-related Visual Impairment) — binary fundus classifier inference.
 
-Supports four backbones (``vit_base``, ``swin_v2``, ``retfound``, ``resnet50``)
-and three uncertainty-estimation methods (``softmax``, ``mc_dropout``, ``edl``).
-Runs on GPU when available and falls back to CPU automatically.
+Supports nine backbones (``vit_base``, ``swin_v2``, ``retfound``,
+``retfound_mae``, ``resnet50``, ``vit_large_mae``, ``vit_base_mae``,
+``dino_vitbase16``, ``retizero``, ``visionfm``) and three uncertainty-estimation
+methods (``softmax``, ``mc_dropout``, ``edl``). Runs on GPU when available and
+falls back to CPU automatically.
 
 Each input image is read as RGB, optionally fundus-disc cropped (cropping is ON
 by default; pass ``--no_crop`` to disable), resized and normalised to the
@@ -25,17 +27,64 @@ Labelled (ground-truth evaluation):
 
 Examples
 --------
+Fundus-disc cropping is ON by default: a Hough Circle Transform locates the
+retinal disc and crops it to a square before the model resize. If the input
+images were already manually cropped at training time, pass ``--no_crop`` at
+inference to match the training-time preprocessing — otherwise leave it off.
+
+Quick reference — softmax inference, one command per supported backbone (fill
+in ``--input_dir`` with your image folder; add ``--no_crop`` iff the images
+are already disc-cropped):
+
+# retfound
+python infer_aviri.py --backbone retfound --method softmax \
+    --checkpoint models_weight/retfound/checkpoint-best_SEEDonly_AUC9497.pth \
+    --input_dir /path/to/images
+
+# resnet50  (training label in main_retro_aviri_2026_rebuttal.py: "ResNet50")
+python infer_aviri.py --backbone resnet50 --method softmax \
+    --checkpoint models_weight/resnet50/aviri_class_model4ResNet50_lr1e-05-AUC9454.pth \
+    --input_dir /path/to/images
+
+# vit_base
+python infer_aviri.py --backbone vit_base --method softmax \
+    --checkpoint models_weight/vit_base/aviri_class_model4vit_base_lr1e-05-AUC9428.pth \
+    --input_dir /path/to/images
+
+# swin_v2
+python infer_aviri.py --backbone swin_v2 --method softmax \
+    --checkpoint models_weight/swin_v2/aviri_class_model4swin_v2_lr1e-05-AUC9514.pth \
+    --input_dir /path/to/images
+
+# vit_large_mae
+python infer_aviri.py --backbone vit_large_mae --method softmax \
+    --checkpoint models_weight/vit_large_mae/aviri_class_model4vit_large_mae_lr3e-05-AUC9505.pth \
+    --input_dir /path/to/images
+
+# vit_base_mae  (stage your fine-tuned checkpoint under models_weight/vit_base_mae/)
+python infer_aviri.py --backbone vit_base_mae --method softmax \
+    --checkpoint models_weight/vit_base_mae/<your_vit_base_mae_checkpoint>.pth \
+    --input_dir /path/to/images
+
+# dino_vitbase16
+python infer_aviri.py --backbone dino_vitbase16 --method softmax \
+    --checkpoint models_weight/dino_vitbase16/aviri_class_model4dino_vitbase16_lr1e-06-AUC9472.pth \
+    --input_dir /path/to/images
+
+# retizero
+python infer_aviri.py --backbone retizero --method softmax \
+    --checkpoint models_weight/retizero/retizero_lr1e-4_best-AUC9443.pth \
+    --input_dir /path/to/images
+
+
+Longer-form examples below cover alternate test folders, the ``--no_crop``
+flag in context, MC dropout, EDL, and the ``visionfm`` backbone.
+
 # Softmax, Swin V2
 python infer_aviri.py \
     --backbone swin_v2 \
     --method   softmax \
     --checkpoint models_weight/swin_v2/aviri_class_model4swin_v2_lr1e-05-AUC9514.pth \
-    --input_dir /path/to/images
-
-python infer_aviri.py \
-    --backbone swin_v2 \
-    --method   softmax \
-    --checkpoint models_weight/swin_v2/aviri_class_model4swin_v2_lr1e-05-AUC9514.pth \
     --input_dir /data2/xiaofeng/Foundation_Model/RETFound_MAE/crystalvue-aviri/hcsa20/test
 python infer_aviri.py \
     --backbone swin_v2 \
@@ -43,17 +92,6 @@ python infer_aviri.py \
     --checkpoint models_weight/swin_v2/aviri_class_model4swin_v2_lr1e-05-AUC9514.pth \
     --input_dir /data2/xiaofeng/Foundation_Model/RETFound_MAE/seed_aviri/full_seed/test \
     --no_crop
-
-python infer_aviri.py \
-    --backbone swin_v2 \
-    --method   softmax \
-    --checkpoint models_weight/swin_v2/new_aviri_class_model4swin_v2_softmax_lr2e-06.pth \
-    --input_dir /data/xiaofeng/HCSA/FM_compare/new_aviri_data/test --no_crop
-python infer_aviri.py \
-    --backbone swin_v2 \
-    --method   softmax \
-    --checkpoint models_weight/swin_v2/new_aviri_class_model4swin_v2_softmax_lr2e-06.pth \
-    --input_dir /data2/xiaofeng/Foundation_Model/RETFound_MAE/crystalvue-aviri/hcsa20/test
 
 python infer_aviri.py \
     --backbone vit_base \
@@ -68,18 +106,6 @@ python infer_aviri.py \
     --no_crop
 
 python infer_aviri.py \
-    --backbone vit_base \
-    --method   softmax \
-    --checkpoint models_weight/vit_base/new_aviri_class_model4vit_base_softmax_lr2e-06.pth \
-    --input_dir /data/xiaofeng/HCSA/FM_compare/new_aviri_data/test --no_crop
-python infer_aviri.py    \
-    --backbone vit_base \
-    --method   softmax \
-    --checkpoint models_weight/vit_base/new_aviri_class_model4vit_base_softmax_lr2e-06.pth \
-    --input_dir /data2/xiaofeng/Foundation_Model/RETFound_MAE/crystalvue-aviri/hcsa20/test
-
-
-python infer_aviri.py \
     --backbone retfound_mae \
     --method   softmax \
     --checkpoint models_weight/retfound/checkpoint-best_SEEDonly_AUC9497.pth \
@@ -89,18 +115,6 @@ python infer_aviri.py \
     --method   softmax \
     --checkpoint models_weight/retfound/checkpoint-best_SEEDonly_AUC9497.pth \
     --input_dir /data2/xiaofeng/Foundation_Model/RETFound_MAE/seed_aviri/full_seed/test \
-    --no_crop
-
-python infer_aviri.py \
-    --backbone retfound \
-    --method   softmax \
-    --checkpoint models_weight/retfound/new_aviri_class_model4retfound_softmax_lr3e-05.pth \
-    --input_dir /data2/xiaofeng/Foundation_Model/RETFound_MAE/crystalvue-aviri/hcsa20/test
-python infer_aviri.py \
-    --backbone retfound \
-    --method   softmax \
-    --checkpoint models_weight/retfound/new_aviri_class_model4retfound_softmax_lr3e-05.pth \
-    --input_dir /data/xiaofeng/HCSA/FM_compare/new_aviri_data/test \
     --no_crop
 
 # Softmax, ResNet-50
@@ -121,7 +135,6 @@ python infer_aviri.py \
     --checkpoint models_weight/resnet50/aviri_class_model4ResNet50_lr1e-05-AUC9454.pth \
     --input_dir /data2/xiaofeng/Foundation_Model/RETFound_MAE/crystalvue-aviri/hcsa20/test-aug2026 \
     --no_crop
-
 python infer_aviri.py \
     --backbone resnet50 \
     --method   softmax \
@@ -176,17 +189,32 @@ IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp'}
 MEAN_NORM = [0.485, 0.456, 0.406]
 STD_NORM = [0.229, 0.224, 0.225]
 
+# VisionFM was pretrained on retinal fundus photos with its own channel stats
+# (VisionFM-main/utils.py::get_stats("Fundus")). Using ImageNet stats here
+# measurably hurts AUC, so apply the training-time values when loading its
+# backbone.
+_VFM_FUNDUS_MEAN = [0.423737496137619, 0.2609460651874542, 0.128403902053833]
+_VFM_FUNDUS_STD = [0.29482534527778625, 0.20167365670204163, 0.13668020069599152]
+
 BACKBONE_INPUT_SIZE = {
     'vit_base': 224,
     'retfound': 224,
     'retfound_mae': 224,
     'swin_v2': 256,
     'resnet50': 224,
+    'vit_large_mae': 224,
+    'vit_base_mae': 224,
+    'dino_vitbase16': 224,
+    'retizero': 224,
+    'visionfm': 224,
 }
 
-# RETFound-MAE was trained with BICUBIC resize (MAE util/datasets.py build_transform);
-# all other backbones here use torchvision's default BILINEAR.
-_BICUBIC_BACKBONES = {'retfound_mae'}
+# Backbones whose training pipeline resized with BICUBIC interpolation —
+# everything else uses torchvision's default BILINEAR. RETFound-MAE:
+# ``MAE util/datasets.py::build_transform``. VisionFM:
+# ``inference_visionfm_for_multiclass_classification.py`` passes
+# ``interpolation=3`` (BICUBIC in PIL's enum).
+_BICUBIC_BACKBONES = {'retfound_mae', 'visionfm'}
 
 
 def _resolve_device(flag):
@@ -260,10 +288,14 @@ def build_transform(image_size, backbone):
     interp = (transforms.InterpolationMode.BICUBIC
               if backbone in _BICUBIC_BACKBONES
               else transforms.InterpolationMode.BILINEAR)
+    if backbone == 'visionfm':
+        mean, std = _VFM_FUNDUS_MEAN, _VFM_FUNDUS_STD
+    else:
+        mean, std = MEAN_NORM, STD_NORM
     return transforms.Compose([
         transforms.Resize((image_size, image_size), interpolation=interp),
         transforms.ToTensor(),
-        transforms.Normalize(MEAN_NORM, STD_NORM),
+        transforms.Normalize(mean, std),
     ])
 
 
@@ -299,12 +331,21 @@ def discover_images(input_dir):
 def load_standard_checkpoint(checkpoint_path, backbone, device):
     """Load a softmax or MC-dropout checkpoint onto ``device``.
 
-    Handles two save formats:
+    Handles three save formats:
       - ``torch.save(model, path)`` — full nn.Module pickle; used directly.
       - state_dict (dict with ``model_state`` / ``state_dict`` / ``model`` or
         bare parameters) — a fresh architecture is built and the weights are
         loaded, including RETFound's cls_token/pos_embed/blocks prefixing.
+      - VisionFM dual-dict (``visionfm_state_dict`` for backbone +
+        ``classifier_state_dict`` for head) — routed through
+        :class:`VisionFMClassifier.load_finetuned`.
     """
+    if backbone == 'visionfm':
+        from visionfm_model import VisionFMClassifier
+        model = VisionFMClassifier(num_class=2)
+        model.load_finetuned(checkpoint_path)
+        return model.to(device).eval()
+
     obj = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     if isinstance(obj, nn.Module):
         model = obj
@@ -486,10 +527,16 @@ def parse_args():
         description=__doc__,
     )
     parser.add_argument('--backbone', required=True,
-                        choices=['vit_base', 'swin_v2', 'retfound', 'retfound_mae', 'resnet50'],
+                        choices=['vit_base', 'swin_v2', 'retfound', 'retfound_mae', 'resnet50',
+                                 'vit_large_mae', 'vit_base_mae', 'dino_vitbase16',
+                                 'retizero', 'visionfm'],
                         help='Model backbone. retfound_mae = ViT-L/16 with drop_path=0.2 and '
                              'BICUBIC resize (matches RETFound-MAE main_finetune.py defaults). '
-                             'resnet50 = torchvision ResNet-50 (224x224 input)')
+                             'resnet50 = torchvision ResNet-50 (224x224 input). '
+                             'vit_large_mae / vit_base_mae / dino_vitbase16 = timm ImageNet-MAE '
+                             'or DINO pretrained ViTs. retizero = ViT-L/16 + LoRA rank 8. '
+                             'visionfm = ViT-B/16 with VisionFM-style 3-layer MLP head over '
+                             'the last 4 blocks\' CLS tokens')
     parser.add_argument('--method', default='softmax',
                         choices=['softmax', 'mc_dropout', 'edl'],
                         help='Inference / uncertainty method')
