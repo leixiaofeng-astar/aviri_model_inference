@@ -1,0 +1,36 @@
+# -----------------------------------------------------------------------
+# AVIRI Visual-Impairment Inference — Python dependencies
+# Tested on Python 3.12 (Linux, CUDA 12.x and CPU-only).
+#
+# PyTorch MUST be installed first with the wheel matching your CUDA
+# version (or the CPU-only wheel). See
+# https://pytorch.org/get-started/locally/ for the correct command, e.g.:
+#   # CUDA 12.4
+#   pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu124
+#   # CPU only
+#   pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cpu
+#
+# Then install the packages below:
+#   pip install -r requirements.txt
+# -----------------------------------------------------------------------
+
+# Deep-learning framework (install from the correct index above first)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Model architectures — pin for checkpoint compatibility
+timm==0.9.8
+
+# Image I/O and fundus-disc crop
+opencv-python>=4.8.0
+Pillow>=9.0.0
+
+# Numerical / tabular
+numpy>=1.24.0
+pandas>=1.5.0
+
+# Evaluation metrics (AUC, confusion matrices, PR curve)
+scikit-learn>=1.2.0
+
+# Progress bar
+tqdm>=4.65.0
