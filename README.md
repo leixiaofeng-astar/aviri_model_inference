@@ -50,14 +50,14 @@ automatically by the loader.
 ## 1. Folder layout
 
 ```
-model_inference/
+aviri_model_inference/
 ├── infer_aviri.py            # inference entrypoint (this is what you run)
 ├── own_models_5.py           # backbone definitions (required for torch.load)
 ├── models_vit.py             # vendored RETFound ViT-L definition
 ├── visionfm_model.py         # vendored minimal VisionFM ViT-B + MLP head
 ├── fundus_preprocess.py      # fundus-disc crop preprocessor
 ├── requirements.txt          # Python package list
-├── INFERENCE_GUIDE.md        # this file
+├── README.md                 # this file
 └── models_weight/
     ├── vit_base/
     │   ├── aviri_class_model4vit_base_lr1e-05-AUC9428.pth          # softmax
@@ -98,7 +98,7 @@ Requires Ubuntu, Python 3.10+ (3.12 recommended), and (optionally) a
 CUDA-capable GPU.
 
 ```bash
-cd /data/xiaofeng/HCSA/model_inference
+cd ./aviri_model_inference
 python3.12 -m venv aviri_env
 source aviri_env/bin/activate
 ```
